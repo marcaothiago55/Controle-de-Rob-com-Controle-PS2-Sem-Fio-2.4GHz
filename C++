@@ -1,0 +1,142 @@
+#include <PS2X_lib.h>
+
+PS2X ps2x;
+
+int error = 0; 
+byte vibrate = 0;
+
+int IN1 = 7;
+int IN2 = 6;
+int IN3 = 5;
+int IN4 = 4;
+
+void setup() {
+  error = ps2x.config_gamepad(8, 12, A0, 13, true, true);
+  ps2x.enableRumble(); 
+  ps2x.enablePressures(); 
+
+  pinMode(IN1, OUTPUT);
+  pinMode(IN2, OUTPUT);
+  pinMode(IN3, OUTPUT);
+  pinMode(IN4, OUTPUT);
+
+  pararMotores();
+}
+
+void pararMotores() {
+  digitalWrite(IN1, LOW);
+  digitalWrite(IN2, LOW);
+  digitalWrite(IN3, LOW);
+  digitalWrite(IN4, LOW);
+}
+
+void frente() {
+  digitalWrite(IN1, HIGH);
+  digitalWrite(IN2, LOW);
+  digitalWrite(IN3, HIGH);
+  digitalWrite(IN4, LOW);
+}
+
+void tras() {
+  digitalWrite(IN1, LOW);
+  digitalWrite(IN2, HIGH);
+  digitalWrite(IN3, LOW);
+  digitalWrite(IN4, HIGH);
+}
+
+// Curvas suaves com ambos os motores ativos
+void curvaSuaveEsquerda(int intensidade) {
+  analogWrite(IN1, intensidade); // motor esquerdo reduzido
+  analogWrite(IN2, LOW);
+  analogWrite(IN3, 255);         // motor direito cheio
+  analogWrite(IN4, LOW);
+}
+
+void curvaSuaveDireita(int intensidade) {
+  analogWrite(IN1, 255);         // motor esquerdo cheio
+  analogWrite(IN2, LOW);
+  analogWrite(IN3, intensidade); // motor direito reduzido
+  analogWrite(IN4, LOW);
+}
+
+void loop() {
+  ps2x.read_gamepad(false, vibrate); 
+
+  bool movimento = false;
+
+  // --- Controle pelas setas ---
+  if (ps2x.Button(PSB_PAD_UP)) {
+    frente();
+    movimento = true;
+  } 
+  else if (ps2x.Button(PSB_PAD_DOWN)) {
+    tras();
+    movimento = true;
+  } 
+  else if (ps2x.Button(PSB_PAD_LEFT)) {
+    digitalWrite(IN1, HIGH);
+    digitalWrite(IN2, LOW);
+    digitalWrite(IN3, LOW);
+    digitalWrite(IN4, HIGH);
+    movimento = true;
+  } 
+  else if (ps2x.Button(PSB_PAD_RIGHT)) {
+    digitalWrite(IN1, LOW);
+    digitalWrite(IN2, HIGH);
+    digitalWrite(IN3, HIGH);
+    digitalWrite(IN4, LOW);
+    movimento = true;
+  }
+
+  // --- Controle pelos ANALÓGICOS ---
+  int lx = ps2x.Analog(PSS_LX); // esquerda/direita
+  int ly = ps2x.Analog(PSS_LY); // frente/trás
+
+  if (!movimento && (ly != 255 || lx != 255)) {
+
+    // Frente
+    if (ly < 100) {
+      if (lx < 150 && lx > 100) {
+        // Curva suave esquerda sem parar motor
+        int intensidade = map(lx, 100, 150, 255, 180); // quanto mais perto do lado, menor motor esquerdo
+        curvaSuaveEsquerda(intensidade);
+      }
+      else if (lx > 100 && lx < 150) {
+        // Curva suave direita sem parar motor
+        int intensidade = map(lx, 100, 150, 180, 255); // quanto mais perto do lado, menor motor direito
+        curvaSuaveDireita(intensidade);
+      }
+      else if (lx < 100) curvaSuaveEsquerda(180); 
+      else if (lx > 150) curvaSuaveDireita(180);
+      else frente();
+      movimento = true;
+    } 
+    else if (ly > 150) { // trás
+      tras();
+      movimento = true;
+    } 
+    else {
+      // Só curvas laterais se LY neutro
+      if (lx < 100) {
+        digitalWrite(IN1, HIGH);
+        digitalWrite(IN2, LOW);
+        digitalWrite(IN3, LOW);
+        digitalWrite(IN4, HIGH);
+        movimento = true;
+      }
+      else if (lx > 150) {
+        digitalWrite(IN1, LOW);
+        digitalWrite(IN2, HIGH);
+        digitalWrite(IN3, HIGH);
+        digitalWrite(IN4, LOW);
+        movimento = true;
+      }
+    }
+  }
+
+  if (!movimento) {
+    pararMotores();
+  }
+
+  delay(30);
+}
